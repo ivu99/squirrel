@@ -3,28 +3,17 @@
 #import <rime_api.h>
 
 @implementation SquirrelConfig {
-  NSMutableDictionary *_cache;
+  NSMutableDictionary* _cache;
   RimeConfig _config;
-  NSString *_schemaId;
-  SquirrelConfig *_baseConfig;
-  BOOL _isOpen;
+  SquirrelConfig* _baseConfig;
 }
 
 - (instancetype)init {
-  self = [super init];
-  if (self) {
+  if (self = [super init]) {
     _cache = [[NSMutableDictionary alloc] init];
+    _colorSpace = @"srgb";
   }
-  self.colorSpace = @"srgb";
   return self;
-}
-
-- (BOOL)isOpen {
-  return _isOpen;
-}
-
-- (NSString *)schemaId {
-  return _schemaId;
 }
 
 - (BOOL)openBaseConfig {
@@ -33,8 +22,8 @@
   return _isOpen;
 }
 
-- (BOOL)openWithSchemaId:(NSString *)schemaId
-              baseConfig:(SquirrelConfig *)baseConfig {
+- (BOOL)openWithSchemaId:(NSString*)schemaId
+              baseConfig:(SquirrelConfig*)baseConfig {
   [self close];
   _isOpen = !!rime_get_api()->schema_open(schemaId.UTF8String, &_config);
   if (_isOpen) {
@@ -52,10 +41,15 @@
   }
 }
 
-- (BOOL)hasSection:(NSString *)section {
+- (void)dealloc {
+  [self close];
+}
+
+- (BOOL)hasSection:(NSString*)section {
   if (_isOpen) {
     RimeConfigIterator iterator = {0};
-    if (rime_get_api()->config_begin_map(&iterator, &_config, section.UTF8String)) {
+    if (rime_get_api()->config_begin_map(&iterator, &_config,
+                                         section.UTF8String)) {
       rime_get_api()->config_end(&iterator);
       return YES;
     }
@@ -63,74 +57,82 @@
   return NO;
 }
 
-- (BOOL)getBool:(NSString *)option {
+- (BOOL)getBool:(NSString*)option {
   return [self getOptionalBool:option].boolValue;
 }
 
-- (NSInteger)getInt:(NSString *)option {
-  return [self getOptionalInt:option].integerValue;
+- (int)getInt:(NSString*)option {
+  return [self getOptionalInt:option].intValue;
 }
 
-- (double)getDouble:(NSString *)option {
+- (double)getDouble:(NSString*)option {
   return [self getOptionalDouble:option].doubleValue;
 }
 
-- (NSNumber *)getOptionalBool:(NSString *)option {
-  NSNumber* cachedValue = [self cachedValueOfClass:[NSNumber class] forKey:option];
+- (NSNumber*)getOptionalBool:(NSString*)option {
+  NSNumber* cachedValue = [self cachedValueOfObjCType:@encode(BOOL)
+                                               forKey:option];
   if (cachedValue) {
     return cachedValue;
   }
   Bool value;
-  if (_isOpen && rime_get_api()->config_get_bool(&_config, option.UTF8String, &value)) {
+  if (_isOpen &&
+      rime_get_api()->config_get_bool(&_config, option.UTF8String, &value)) {
     return _cache[option] = @(!!value);
   }
   return [_baseConfig getOptionalBool:option];
 }
 
-- (NSNumber *)getOptionalInt:(NSString *)option {
-  NSNumber *cachedValue = [self cachedValueOfClass:[NSNumber class] forKey:option];
+- (NSNumber*)getOptionalInt:(NSString*)option {
+  NSNumber* cachedValue = [self cachedValueOfObjCType:@encode(int)
+                                               forKey:option];
   if (cachedValue) {
     return cachedValue;
   }
   int value;
-  if (_isOpen && rime_get_api()->config_get_int(&_config, option.UTF8String, &value)) {
+  if (_isOpen &&
+      rime_get_api()->config_get_int(&_config, option.UTF8String, &value)) {
     return _cache[option] = @(value);
   }
   return [_baseConfig getOptionalInt:option];
-
 }
 
-- (NSNumber *)getOptionalDouble:(NSString *)option {
-  NSNumber *cachedValue = [self cachedValueOfClass:[NSNumber class] forKey:option];
+- (NSNumber*)getOptionalDouble:(NSString*)option {
+  NSNumber* cachedValue = [self cachedValueOfObjCType:@encode(double)
+                                               forKey:option];
   if (cachedValue) {
     return cachedValue;
   }
   double value;
-  if (_isOpen && rime_get_api()->config_get_double(&_config, option.UTF8String, &value)) {
+  if (_isOpen &&
+      rime_get_api()->config_get_double(&_config, option.UTF8String, &value)) {
     return _cache[option] = @(value);
   }
   return [_baseConfig getOptionalDouble:option];
 }
 
-- (NSString *)getString:(NSString *)option {
-  NSString *cachedValue = [self cachedValueOfClass:[NSString class] forKey:option];
+- (NSString*)getString:(NSString*)option {
+  NSString* cachedValue = [self cachedValueOfClass:[NSString class]
+                                            forKey:option];
   if (cachedValue) {
     return cachedValue;
   }
-  const char *value =
-      _isOpen ? rime_get_api()->config_get_cstring(&_config, option.UTF8String) : NULL;
+  const char* value =
+      _isOpen ? rime_get_api()->config_get_cstring(&_config, option.UTF8String)
+              : NULL;
   if (value) {
     return _cache[option] = @(value);
   }
   return [_baseConfig getString:option];
 }
 
-- (NSColor *)getColor:(NSString *)option {
-  NSColor *cachedValue = [self cachedValueOfClass:[NSColor class] forKey:option];
+- (NSColor*)getColor:(NSString*)option {
+  NSColor* cachedValue = [self cachedValueOfClass:[NSColor class]
+                                           forKey:option];
   if (cachedValue) {
     return cachedValue;
   }
-  NSColor *color = [self colorFromString:[self getString:option]];
+  NSColor* color = [self colorFromString:[self getString:option]];
   if (color) {
     _cache[option] = color;
     return color;
@@ -138,13 +140,15 @@
   return [_baseConfig getColor:option];
 }
 
-- (SquirrelAppOptions *)getAppOptions:(NSString *)appName {
-  NSString * rootKey = [@"app_options/" stringByAppendingString:appName];
-  SquirrelMutableAppOptions* appOptions = [[SquirrelMutableAppOptions alloc] init];
+- (SquirrelAppOptions*)getAppOptions:(NSString*)appName {
+  NSString* rootKey = [@"app_options/" stringByAppendingString:appName];
+  SquirrelMutableAppOptions* appOptions =
+      [[SquirrelMutableAppOptions alloc] init];
   RimeConfigIterator iterator;
   rime_get_api()->config_begin_map(&iterator, &_config, rootKey.UTF8String);
   while (rime_get_api()->config_next(&iterator)) {
-    //NSLog(@"DEBUG option[%d]: %s (%s)", iterator.index, iterator.key, iterator.path);
+    // NSLog(@"DEBUG option[%d]: %s (%s)", iterator.index, iterator.key,
+    // iterator.path);
     BOOL value = [self getBool:@(iterator.path)];
     appOptions[@(iterator.key)] = @(value);
   }
@@ -154,15 +158,24 @@
 
 #pragma mark - Private methods
 
-- (id)cachedValueOfClass:(Class)aClass forKey:(NSString *)key {
+- (id)cachedValueOfClass:(Class)aClass forKey:(NSString*)key {
   id value = [_cache objectForKey:key];
-  if (value && [value isKindOfClass:aClass]) {
+  if ([value isMemberOfClass:aClass]) {
     return value;
   }
   return nil;
 }
 
-- (NSColor *)colorFromString:(NSString *)string {
+- (NSNumber*)cachedValueOfObjCType:(const char*)type forKey:(NSString*)key {
+  id value = [_cache objectForKey:key];
+  if ([value isMemberOfClass:NSNumber.class] &&
+      !strcmp([value objCType], type)) {
+    return value;
+  }
+  return nil;
+}
+
+- (NSColor*)colorFromString:(NSString*)string {
   if (string == nil) {
     return nil;
   }

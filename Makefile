@@ -3,9 +3,6 @@
 all: release
 install: install-release
 
-# Change to `xcode/dist-with-icu` if boost is linked to icu libraries.
-RIME_DIST_TARGET = xcode/dist
-
 RIME_BIN_DIR = librime/dist/bin
 RIME_LIB_DIR = librime/dist/lib
 
@@ -23,7 +20,8 @@ PLUM_DATA = bin/rime-install \
 OPENCC_DATA = data/opencc/TSCharacters.ocd2 \
 	data/opencc/TSPhrases.ocd2 \
 	data/opencc/t2s.json
-DEPS_CHECK = $(RIME_LIBRARY) $(PLUM_DATA) $(OPENCC_DATA)
+SPARKLE_FRAMEWORK = Frameworks/Sparkle.framework
+DEPS_CHECK = $(RIME_LIBRARY) $(PLUM_DATA) $(OPENCC_DATA) $(SPARKLE_FRAMEWORK)
 
 OPENCC_DATA_OUTPUT = librime/share/opencc/*.*
 PLUM_DATA_OUTPUT = plum/output/*.*
@@ -38,14 +36,15 @@ $(RIME_LIBRARY):
 	$(MAKE) librime
 
 $(RIME_DEPS):
-	$(MAKE) -C librime xcode/deps
+	$(MAKE) -C librime deps
 
 librime: $(RIME_DEPS)
-	$(MAKE) -C librime $(RIME_DIST_TARGET)
+	$(MAKE) -C librime release install
 	$(MAKE) copy-rime-binaries
 
 copy-rime-binaries:
 	cp -L $(RIME_LIB_DIR)/$(RIME_LIBRARY_FILE_NAME) lib/
+	cp -pR $(RIME_LIB_DIR)/rime-plugins lib/
 	cp $(RIME_BIN_DIR)/rime_deployer bin/
 	cp $(RIME_BIN_DIR)/rime_dict_manager bin/
 	$(INSTALL_NAME_TOOL) $(INSTALL_NAME_TOOL_ARGS) bin/rime_deployer
@@ -66,7 +65,7 @@ plum-data:
 	$(MAKE) copy-plum-data
 
 opencc-data:
-	$(MAKE) -C librime xcode/deps/opencc
+	$(MAKE) -C librime deps/opencc
 	$(MAKE) copy-opencc-data
 
 copy-plum-data:
@@ -79,6 +78,12 @@ copy-opencc-data:
 	cp $(OPENCC_DATA_OUTPUT) data/opencc/
 
 deps: librime data
+
+clang-format-lint:
+	find . -name '*.m' -o -name '*.h' -maxdepth 1 | xargs clang-format -Werror --dry-run || { echo Please lint your code by '"'"make clang-format-apply"'"'.; false; }
+
+clang-format-apply:
+	find . -name '*.m' -o -name '*.h' -maxdepth 1 | xargs clang-format --verbose -i
 
 ifdef ARCHS
 BUILD_SETTINGS += ARCHS="$(ARCHS)"
@@ -99,10 +104,38 @@ debug: $(DEPS_CHECK)
 	bash package/add_data_files
 	xcodebuild -project Squirrel.xcodeproj -configuration Debug $(BUILD_SETTINGS) build
 
+.PHONY: sparkle copy-sparkle-framework
+
+$(SPARKLE_FRAMEWORK):
+	git submodule update --init --recursive Sparkle
+	$(MAKE) sparkle
+
+sparkle:
+	xcodebuild -project Sparkle/Sparkle.xcodeproj -configuration Release $(BUILD_SETTINGS) build
+	$(MAKE) copy-sparkle-framework
+
+copy-sparkle-framework:
+	mkdir -p Frameworks
+	cp -RP Sparkle/build/Release/Sparkle.framework Frameworks/
+
+clean-sparkle:
+	rm -rf Frameworks/* > /dev/null 2>&1 || true
+	rm -rf Sparkle/build > /dev/null 2>&1 || true
+
 .PHONY: package archive sign-archive
 
 package: release
+ifdef DEV_ID
+	package/sign.bash $(DEV_ID)
+endif
 	bash package/make_package
+ifdef DEV_ID
+	productsign --sign "Developer ID Installer: $(DEV_ID)" package/Squirrel.pkg package/Squirrel-signed.pkg
+	rm package/Squirrel.pkg
+	mv package/Squirrel-signed.pkg package/Squirrel.pkg
+	xcrun notarytool submit package/Squirrel.pkg --keychain-profile "$(DEV_ID)" --wait
+	xcrun stapler staple package/Squirrel.pkg
+endif
 
 archive: package
 	bash package/make_archive
@@ -136,9 +169,11 @@ clean:
 	rm build.log > /dev/null 2>&1 || true
 	rm bin/* > /dev/null 2>&1 || true
 	rm lib/* > /dev/null 2>&1 || true
+	rm lib/rime-plugins/* > /dev/null 2>&1 || true
 	rm data/plum/* > /dev/null 2>&1 || true
 	rm data/opencc/* > /dev/null 2>&1 || true
 
 clean-deps:
 	$(MAKE) -C plum clean
-	$(MAKE) -C librime xcode/clean
+	$(MAKE) -C librime clean
+	$(MAKE) clean-sparkle

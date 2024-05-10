@@ -3,7 +3,7 @@
     新詩醉墨時一揮
     別後寄我無辭遠
 
-    　　——歐陽修
+    　　　——歐陽修
 
 今由　[中州韻輸入法引擎／Rime Input Method Engine](https://rime.im)
 及其他開源技術強力驅動
@@ -23,12 +23,12 @@
 您可能還需要 Rime 用於其他操作系統的發行版：
 
   * ibus-rime 及 fcitx-rime 用於 Linux
-  * 【小狼毫】用於 Windows XP, Windows 7 ~ Windows 10
+  * 【小狼毫】用於 Windows
 
 安裝輸入法
 ---
 
-本品適用於 macOS 10.9+
+本品適用於 macOS 13.0+
 
 初次安裝，如果在部份應用程序中打不出字，請註銷並重新登錄。
 
