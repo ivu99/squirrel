@@ -5,6 +5,8 @@ on:
       - '*'
     branches:
       - master
+    paths:
+      - 'sources/**'
   workflow_dispatch:
 
 jobs:
@@ -19,14 +21,20 @@ jobs:
           fetch-depth: 0
           submodules: true
 
-      - name: Install clang-format
-        run: brew install clang-format
+      - name: Install SwiftLint
+        run: brew install swiftlint
 
       - name: Lint
-        run: make clang-format-lint
+        run: swiftlint
 
       - name: Build Squirrel
         run: ./action-build.sh archive
+
+      - name: Install periphery
+        run: brew install peripheryapp/periphery/periphery
+
+      - name: Check Unused Code
+        run: periphery scan --skip-build --index-store-path build/Index.noindex/DataStore
 
       - name: Build changelog
         id: release_log
@@ -40,7 +48,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: ncipollo/release-action@v1
         with:
-          artifacts: "package/*.zip"
+          artifacts: "package/Squirrel-*.pkg"
           body: |
             ${{ steps.release_log.outputs.changelog }}
           draft: true
@@ -55,4 +63,4 @@ jobs:
           prerelease: true
           title: "Nightly build"
           files: |
-            package/*.zip
+            package/Squirrel-*.pkg
